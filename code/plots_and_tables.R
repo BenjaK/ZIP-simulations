@@ -1,13 +1,25 @@
 library(magrittr)
 library(tidyverse)
+library(scanstatistics)
 
 source("./code/performance_metric_functions.R")
 
 # Define simulation parameters -------------------------------------------------
 
+# Generate locations and zones
+set.seed(20180101)
+n_locations <- 100
+geo <- data.frame(location = 1:n_locations,
+                  x = runif(n_locations, -1, 1),
+                  y = runif(n_locations, -1, 1))
+
 # Time parameters
 max_duration <- 10
 weeks_scanned <- 20
+max_zone_length <- 25
+
+# Create zones
+zones <- coords_to_knn(geo[, c("x", "y")], k = max_zone_length) %>% knn_zones
 
 # Baseline parameters
 scenarios <- expand.grid(mu = c(1, 5, 10),
@@ -16,8 +28,7 @@ scenarios <- expand.grid(mu = c(1, 5, 10),
                          obz = c(1, 5, 10, 15))
 
 # Significance levels
-alphas <- c(0.001, 0.005,
-            seq(0.01, 0.1, by = 0.005))
+alphas <- c(0.001, 0.005, seq(0.01, 0.1, by = 0.005))
 
 # Change values here to explore data
 display_scenario <- list(
@@ -38,18 +49,7 @@ sim_df <- readRDS("./data/sim_df.rds")
 fp_wod_df <- calc_wod_multiple(sim_df %>% filter(q == 1), alphas)
 
 # True positives
-tp_wod_df <- calc_wod_multiple(sim_df %>% filter(q > 1) %>% sample_n(1000), c(0.01, 0.1))
-
-tp_wod_df <- calc_wod_multiple(sim_df %>% filter(mu == display_scenario$mu,
-                                                 p == display_scenario$p,
-                                                 q == display_scenario$q,
-                                                 true_zone_nr == display_scenario$true_zone_nr),
-                               seq(0.01, 0.1, by = 0.01))
-
-
-# Scenario to plot -------------------------------------------------------------
-
-
+tp_wod_df <- calc_wod_multiple(sim_df %>% filter(q > 1), alphas)
 
 
 # Family-wise error rate (FWER) ------------------------------------------------
@@ -142,3 +142,57 @@ fwer_df <- fp_wod_df %>% calculate_FWER
    ylab(expression(italic(F)-score)) +
    theme_bw()
 )
+
+# Bivariate power distribution table -------------------------------------------
+
+# Compute the bivariate power distribution for the three scan statistics
+bivp_uczip <- sim_df %>%
+  filter(Method == "UC-ZIP",
+         mu == display_scenario$mu,
+         p == display_scenario$p,
+         q == display_scenario$q,
+         true_zone_nr == display_scenario$true_zone_nr,
+         true_duration == display_scenario$true_duration) %>%
+  bivariate_power(zones, display_scenario$alpha, max_zone_length)
+
+bivp_ucpoi <- sim_df %>%
+  filter(Method == "UC-POI",
+         mu == display_scenario$mu,
+         p == display_scenario$p,
+         q == display_scenario$q,
+         true_zone_nr == display_scenario$true_zone_nr,
+         true_duration == display_scenario$true_duration) %>%
+  bivariate_power(zones, display_scenario$alpha, max_zone_length)
+
+bivp_kcpoi <- sim_df %>%
+  filter(Method == "KC-POI",
+         mu == display_scenario$mu,
+         p == display_scenario$p,
+         q == display_scenario$q,
+         true_zone_nr == display_scenario$true_zone_nr,
+         true_duration == display_scenario$true_duration) %>%
+  bivariate_power(zones, display_scenario$alpha, max_zone_length)
+
+# Combine into a single table
+bivp_table <- cbind(seq_len(max_zone_length),
+                    bivp_uczip$table, rowSums(bivp_uczip$table),
+                    bivp_ucpoi$table, rowSums(bivp_kcpoi$table),
+                    bivp_ucpoi$table, rowSums(bivp_kcpoi$table))
+
+# Print table in LaTeX format (still needs some manual editing to reproduce the
+# table in the paper)
+library(kableExtra)
+bivp_table %>%
+  knitr::kable(format = "latex",
+               booktabs = TRUE,
+               row.names = TRUE,
+               caption = "Bivariate power distribution") %>%
+  # kableExtra::kable_styling() %>%
+  # column_spec(7, border_left = T, bold = T) %>%
+  add_header_above(c("Length" = 1,
+                     "Shared locations" = 5,
+                     "Sum" = 1,
+                     "Shared locations" = 5,
+                     "Sum" = 1,
+                     "Shared locations" = 5,
+                     "Sum" = 1))

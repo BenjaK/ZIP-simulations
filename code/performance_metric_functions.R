@@ -38,63 +38,6 @@ calculate_FWER <- function(wod_df) {
       specificity = 1 - FWER)
 }
 
-count_true_positives <- function(wod_df) {
-  wod_df %>%
-    filter(q > 1) %>%
-    group_by(Method, mu, p, q, true_zone_nr, alpha) %>%
-    summarize(n_positives = n(),
-              true_positives = sum(wod < Inf)) %>%
-    ungroup %>%
-    mutate(
-      TPR = true_positives / n_positives)
-}
-
-
-roc <- function(wod_df) {
-  FWER <- wod_df %>%
-    filter(q == 1) %>%
-    group_by(mu, p, alpha) %>%
-    summarize(negatives = n(),
-              false_positives = sum(wod < Inf)) %>%
-    ungroup %>%
-    mutate(FWER = false_positives / negatives)
-  tpr <- wod_df %>%
-    filter(q > 1) %>%
-    group_by(mu, p, q, true_zone_nr, alpha) %>%
-    summarize(positives = n(),
-              true_positives = sum(wod < Inf)) %>%
-    ungroup %>%
-    mutate(TPR = true_positives / positives)
-  right_join(FWER, tpr, by = c("mu", "p", "alpha")) %>%
-    dplyr::select(mu, p, true_zone_nr, q, alpha,
-                  negatives, positives, false_positives, true_positives,
-                  FWER, TPR)
-}
-
-detected_in_time <- function(wod_df) {
-  wod_df %>%
-    filter(q > 1) %>%
-    group_by(mu, p, q, true_zone_nr, alpha) %>%
-    summarize(n_detected = sum(wod < Inf),
-              prop_detected = n_detected / n(),
-              prop_undetected = 1 - prop_detected) %>%
-    ungroup
-}
-
-detected_overall <- function(df, alphas) {
-  out <- NULL
-  for (a in alphas) {
-    out <- rbind(out, df %>%
-      filter(q > 1) %>%
-      group_by(mu, p, q, true_zone_nr, true_duration) %>%
-      summarize(n_detected = sum(pvalue < a),
-                prop_detected = mean(pvalue < a)) %>%
-      mutate(prop_undetected = 1 - prop_detected,
-             alpha = a) %>%
-      ungroup)
-  }
-  out
-}
 
 bivariate_power <- function(df, zones, alpha, max_zone_length = 25) {
   n <- nrow(df)
