@@ -120,12 +120,12 @@ fwer_df <- fp_wod_df %>% calculate_FWER
 )
 
 # Limit as p -> 0 --------------------------------------------------------------
-
+# Change the "true zone number" at line 128 below to get a different zone size
 (limp0_plot <- sim_df %>%
    filter(Method %in% c("UC-ZIP", "UC-POI")) %>%
    filter(mu == display_scenario$mu,
           q == display_scenario$q,
-          true_zone_nr == 10, #display_scenario$true_zone_nr,
+          true_zone_nr == 10, # CHANGE HERE
           true_duration == display_scenario$true_duration) %>%
    mutate(Fscore = 2 / (1 / precision + 1 / recall)) %>%
    group_by(Method, p) %>%
